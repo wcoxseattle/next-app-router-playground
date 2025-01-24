@@ -1,42 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const allowedOrigins = ['http://localhost:5076', 'http://localhost:3000'];
-//TODO - delete Allow Origins if not needed
-const corsOptions = {
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+const SRC_BASE_URL = '/api/';
+const DEST_BASE_URL = 'http://localhost:5037/api/';
+
+// Nextjs has very limited configurability options for this object, do not change this for now.
+export const config = {
+  matcher: ['/api/:path*'],
 };
 
-export function middleware(request: NextRequest) {
-  // Check the origin from the request
-  const origin = request.headers.get('origin') ?? '';
-  const isAllowedOrigin = allowedOrigins.includes(origin);
+function rewriteUrl(refUrl: URL, oldPrefix: string, newPrefix: string): URL {
+  const pathName = refUrl.pathname.replace(oldPrefix, newPrefix);
 
-  const isPreflight = request.method === 'OPTIONS';
-
-  if (isPreflight) {
-    const preflightHeaders = {
-      ...(isAllowedOrigin && { 'Access-Control-Allow-Origin': origin }),
-      ...corsOptions,
-    };
-    return NextResponse.json({}, { headers: preflightHeaders });
-  }
-
-  // Handle simple requests
-  const response = NextResponse.next();
-
-  if (isAllowedOrigin) {
-    response.headers.set('Access-Control-Allow-Origin', origin);
-  }
-
-  Object.entries(corsOptions).forEach(([key, value]) => {
-    response.headers.set(key, value);
-  });
-
-  //response.headers.set('Access-Control-Allow-Origin', origin);
-  return response;
+  return new URL(`${pathName}${refUrl.search}`);
 }
 
-export const config = {
-  matcher: '/api/:path*',
-};
+export async function middleware(request: NextRequest) {
+  const refUrl = request.nextUrl;
+  const destUrl = rewriteUrl(refUrl, SRC_BASE_URL, DEST_BASE_URL);
+
+  const response = NextResponse.rewrite(destUrl, { request: request });
+
+  return response;
+}
